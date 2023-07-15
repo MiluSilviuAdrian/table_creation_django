@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django generated files
+*.log
+*.pot
+*.pyc
+*.psql
+*.pgdump
+*.pgpass
+*.pgbouncer
+/media
+/static
+/myvenv
+
+# Secret keys
+*.key
+
+# Environment variables
+.env
+
+# Development and local settings
+local_settings.py
+
+# IDE specific files
+.idea/
+.vscode/
+
+# Dependency directories
+env/
