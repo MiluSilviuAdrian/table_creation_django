@@ -1,13 +1,15 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 
+import sys
+
 def validate_field_type(value):
     allowed_types = ['string', 'number', 'boolean']
     if value not in allowed_types:
         raise ValidationError(f"Invalid field type: {value}. Allowed types are {', '.join(allowed_types)}")
 
 class Table(models.Model):
-    fields = models.JSONField()
+    fields = models.JSONField(null=True)
 
     def create_model(self):
         attrs = {
@@ -22,7 +24,12 @@ class Table(models.Model):
             field_instance = self.get_model_field(field_type)
             attrs[field_name] = field_instance
 
-        return type(self.__class__.__name__ + 'Model', (models.Model,), attrs)
+        # Delete the existing model class to avoid conflicts
+        table_model_name = self.__class__.__name__ + 'Model'
+        if table_model_name in sys.modules[__name__].__dict__:
+            del sys.modules[__name__].__dict__[table_model_name]
+
+        return type(table_model_name, (models.Model,), attrs)
 
     @staticmethod
     def get_model_field(field_type):

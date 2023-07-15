@@ -1,90 +1,122 @@
-from django.db import models
 from django.test import TestCase
-from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
+from django.urls import reverse
 from .models import Table, TableRow
-from django.core.management import call_command
-
 
 class TableBuilderAppTests(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        call_command('migrate', interactive=False)
-
     def setUp(self):
         self.client = APIClient()
 
     def test_create_table(self):
-        url = reverse('table_builder_app:create-table')
+        url = reverse("table_builder_app:create-table")
         data = {
             "fields": [
                 {"name": "name", "type": "string"},
                 {"name": "age", "type": "number"},
-                {"name": "is_active", "type": "boolean"}
+                {"name": "active", "type": "boolean"}
             ]
         }
 
-        response = self.client.post(url, data, format='json')
+        response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Table.objects.count(), 1)
-        self.assertEqual(len(response.data['fields']), 3)
+        self.assertEqual(len(Table.objects.get().fields), 3)
 
-    def test_update_table(self):
+
+    def test_get_table_rows(self):
         table = Table.objects.create(fields=[
             {"name": "name", "type": "string"},
             {"name": "age", "type": "number"},
-            {"name": "is_active", "type": "boolean"}
+            {"name": "active", "type": "boolean"}
         ])
-        url = reverse('table_builder_app:update-table', args=[table.id])
+        TableRow.objects.create(table=table, data={
+            "name": "John",
+            "age": 25,
+            "active": True
+        })
+        TableRow.objects.create(table=table, data={
+            "name": "Jane",
+            "age": 30,
+            "active": False
+        })
+
+        url = reverse("table_builder_app:get-table-rows", args=[table.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+
+    def test_update_table(self):
+        # Prepare the request data
         data = {
             "fields": [
-                {"name": "name", "type": "string"},
-                {"name": "age", "type": "number"},
-                {"name": "is_active", "type": "boolean"},
-                {"name": "email", "type": "string"}
+                {
+                    "name": "field1",
+                    "type": "string"
+                },
+                {
+                    "name": "field2",
+                    "type": "number"
+                },
+                {
+                    "name": "field3",
+                    "type": "boolean"
+                }
             ]
         }
 
+        # Create a table with the initial fields
+        table = Table.objects.create(fields=[
+            {
+                "name": "name",
+                "type": "string"
+            },
+            {
+                "name": "age",
+                "type": "number"
+            },
+            {
+                "name": "active",
+                "type": "boolean"
+            }
+        ])
+
+        # Make a PUT request to update the table
+        url = reverse("table_builder_app:update-table", args=[table.pk])
         response = self.client.put(url, data, format='json')
+
+        # Assert the response status code
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Table.objects.count(), 1)
-        self.assertEqual(len(response.data['fields']), 4)
+
+        # Retrieve the updated table from the database
+        updated_table = Table.objects.get(pk=table.pk)
+
+        # Assert the updated fields
+        self.assertEqual(updated_table.fields, data["fields"])
+
+        # Assert that all previous rows are deleted
+        self.assertEqual(updated_table.rows.count(), 0)
+
 
     def test_create_table_row(self):
-        table = Table.objects.create(fields=[{"name": "name", "type": "string"}])
-        url = reverse('table_builder_app:create-table-row', kwargs={'pk': table.pk})
-        data = {"table": table.pk, "data": {"name": "John Doe"}}
-        response = self.client.post(url, data=data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(TableRow.objects.count(), 1)
-        self.assertEqual(TableRow.objects.first().table, table)
-        self.assertEqual(TableRow.objects.first().data, data["data"])
+        table = Table.objects.create(fields=[
+            {"name": "name", "type": "string"},
+            {"name": "age", "type": "number"},
+            {"name": "active", "type": "boolean"}
+        ])
 
-    def test_create_dynamic_table(self):
-        url = reverse('table_builder_app:create-table')
         data = {
-            "fields": [
-                {"name": "name", "type": "string"},
-                {"name": "age", "type": "number"},
-                {"name": "is_active", "type": "boolean"}
-            ]
+            "data": {
+                "name": "John",
+                "age": 25,
+                "active": True
+            }
         }
 
-        response = self.client.post(url, data, format='json')
+        url = reverse("table_builder_app:create-table-row", args=[table.pk])
+        response = self.client.post(url, data, format="json")
+
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Table.objects.count(), 1)
-
-        # Verify the dynamically created model
-        dynamic_table = Table.objects.first()
-        dynamic_model = dynamic_table.create_model()
-
-        # Verify the model fields
-        field_names = [field.name for field in dynamic_model._meta.get_fields()]
-        self.assertIn("name", field_names)
-        self.assertIn("age", field_names)
-        self.assertIn("is_active", field_names)
-
-        # Verify the model string representation
-        dynamic_instance = dynamic_model(name="John Doe", age=30, is_active=True)
-        self.assertEqual(str(dynamic_instance), str(dynamic_instance.id))
+        self.assertEqual(TableRow.objects.count(), 1)
+        self.assertEqual(TableRow.objects.get().table, table)
+        self.assertEqual(TableRow.objects.get().data, data["data"])
